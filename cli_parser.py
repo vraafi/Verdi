@@ -26,15 +26,15 @@ def process_with_llm_cli(raw_text: str) -> Optional[Dict[str, Any]]:
         return None
 
     prompt = (
-        "Ekstrak entitas penting dari teks berikut (Judul, Harga/Data Utama, Sentimen/Ringkasan). "
-        "Kembalikan HANYA format JSON valid."
+        "Berikut adalah gabungan teks mentah dari Hacker News, GitHub Trending, dan Dev.to. "
+        "Analisis data ini dan ekstrak menjadi format JSON dengan struktur: "
+        "1. top_5_tech_topics (5 teknologi/bahasa/framework yang paling banyak dibahas), "
+        "2. overall_sentiment (Positif/Negatif/Netral terhadap industri tech), dan "
+        "3. summary (1 paragraf singkat 50 kata). "
+        "KEMBALIKAN HANYA JSON VALID TANPA MARKDOWN."
     )
 
     # Menyiapkan perintah CLI
-    # Kita asumsikan gemini-cli menerima argumen berupa teks gabungan antara prompt dan raw text,
-    # atau mungkin menerima prompt sebagai satu argumen dan input text sebagai stdin/argumen lain.
-    # Karena instruksi menyebut "Masukkan prompt dan teks kotor tersebut sebagai argumen atau input",
-    # kita gabungkan dalam satu argumen string untuk dieksekusi.
     combined_input = f"{prompt}\n\nTeks:\n{raw_text}"
 
     command = ["gemini-cli", combined_input]
