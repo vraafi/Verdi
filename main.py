@@ -3,7 +3,9 @@ from fastapi.responses import JSONResponse
 import logging
 import os
 
-from database import init_db, get_latest_data
+from database import init_db, get_latest_data, insert_data
+from scraper import scrape_data
+from cli_parser import process_with_llm_cli
 
 # Inisialisasi DB saat mulai
 init_db()
@@ -61,6 +63,34 @@ def get_latest_pipeline_data():
         raise HTTPException(status_code=404, detail="No data available")
 
     return data_record
+
+@app.post("/api/v1/pipeline/run", response_class=JSONResponse, dependencies=[Depends(verify_rapidapi_secret)])
+def run_pipeline():
+    """
+    Endpoint untuk menjalankan scraper, memprosesnya dengan AI CLI, dan menyimpannya ke database secara manual.
+    """
+    logging.info("Menerima request untuk menjalankan pipeline manual (/api/v1/pipeline/run)")
+
+    # 1. Scrape
+    raw_text = scrape_data()
+    if not raw_text:
+        logging.error("Pipeline gagal: Scraper tidak menghasilkan data.")
+        raise HTTPException(status_code=500, detail="Scraping failed")
+
+    # 2. Parse AI
+    parsed_json = process_with_llm_cli(raw_text)
+    if not parsed_json:
+        logging.error("Pipeline gagal: AI Parser gagal memproses teks.")
+        raise HTTPException(status_code=500, detail="AI Parsing failed")
+
+    # 3. Simpan ke database
+    success = insert_data(parsed_json, status="success")
+    if not success:
+        logging.error("Pipeline gagal: Gagal menyimpan data ke database.")
+        raise HTTPException(status_code=500, detail="Database insertion failed")
+
+    logging.info("Pipeline manual berhasil dijalankan dan data telah disimpan.")
+    return {"status": "success", "message": "Pipeline run successfully and data saved"}
 
 # Server akan dijalankan menggunakan Uvicorn di command line
 # Contoh: RAPIDAPI_SECRET="my_secret" uvicorn main:app --host 0.0.0.0 --port 8000

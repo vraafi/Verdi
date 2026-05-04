@@ -37,13 +37,14 @@ def process_with_llm_cli(raw_text: str) -> Optional[Dict[str, Any]]:
     # Menyiapkan perintah CLI
     combined_input = f"{prompt}\n\nTeks:\n{raw_text}"
 
-    command = ["gemini-cli", combined_input]
+    command = ["gemini-cli"]
 
     try:
-        logging.info("Mulai memanggil gemini-cli subprocess...")
-        # Menjalankan subprocess, timeout mencegah VPS macet jika hang
+        logging.info("Mulai memanggil gemini-cli subprocess menggunakan stdin...")
+        # Menjalankan subprocess, lewatkan kombinasi prompt dan text via stdin (input)
         result = subprocess.run(
             command,
+            input=combined_input,
             capture_output=True,
             text=True,
             timeout=30 # 30 detik timeout batas eksekusi

@@ -16,7 +16,8 @@ DB_NAME = "pipeline.db"
 def init_db():
     """Initializes the SQLite database and creates the necessary table if it doesn't exist."""
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS api_data (
@@ -27,7 +28,7 @@ def init_db():
             )
         ''')
         conn.commit()
-        logging.info("Tabel 'api_data' siap atau sudah ada.")
+        logging.info("Tabel 'api_data' siap atau sudah ada dengan mode WAL.")
     except sqlite3.Error as e:
         logging.error(f"Gagal inisialisasi database SQLite. Error: {e}")
     finally:
@@ -46,7 +47,7 @@ def insert_data(data: Dict[str, Any], status: str = "success") -> bool:
         bool: True if insert was successful, False otherwise.
     """
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
         cursor = conn.cursor()
 
         tanggal_ekstrak = datetime.now().isoformat()
@@ -75,7 +76,7 @@ def get_latest_data() -> Optional[Dict[str, Any]]:
         Optional[Dict[str, Any]]: A dictionary containing the record, or None if not found/error.
     """
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
         # return rows as dicts
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
