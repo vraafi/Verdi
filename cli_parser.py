@@ -28,13 +28,22 @@ def process_with_llm_cli(raw_text: str) -> Optional[Dict[str, Any]]:
         logging.error("Teks input kosong. Menghentikan pemrosesan AI.")
         return None
 
+    # Truncate text to avoid context window overflow for smaller models
+    max_chars = 15000
+    if len(raw_text) > max_chars:
+        logging.info(f"Teks mentah terlalu panjang ({len(raw_text)} chars). Memotong menjadi {max_chars} chars.")
+        raw_text = raw_text[:max_chars]
+
     prompt = (
         "Berikut adalah gabungan teks mentah dari Hacker News, GitHub Trending, dan Dev.to. "
-        "Analisis data ini dan ekstrak menjadi format JSON dengan struktur: "
-        "1. top_5_tech_topics (5 teknologi/bahasa/framework yang paling banyak dibahas), "
-        "2. overall_sentiment (Positif/Negatif/Netral terhadap industri tech), dan "
-        "3. summary (1 paragraf singkat 50 kata). "
-        "KEMBALIKAN HANYA JSON VALID TANPA MARKDOWN."
+        "Analisis data ini dan ekstrak menjadi format JSON. "
+        "Wajib mengikuti struktur schema ini secara ketat:\n"
+        "{\n"
+        '  "top_5_tech_topics": ["Tech1", "Tech2", "Tech3", "Tech4", "Tech5"],\n'
+        '  "overall_sentiment": "Positif/Negatif/Netral",\n'
+        '  "summary": "Satu paragraf singkat 50 kata mengenai trend saat ini."\n'
+        "}\n"
+        "KEMBALIKAN HANYA JSON VALID TANPA MARKDOWN. JANGAN TAMBAHKAN TEKS LAIN."
     )
 
     # Menyiapkan perintah CLI
@@ -102,7 +111,18 @@ def process_with_llm_cli(raw_text: str) -> Optional[Dict[str, Any]]:
 
                 # Parse JSON
                 parsed_json = json.loads(clean_json_str)
-                logging.info(f"Berhasil parsing output gemini-cli menjadi JSON dengan model: {model}")
+
+                # Validasi Schema
+                if not isinstance(parsed_json, dict):
+                    raise ValueError("Output JSON bukan dictionary")
+                if "top_5_tech_topics" not in parsed_json or not isinstance(parsed_json["top_5_tech_topics"], list):
+                    raise ValueError("Schema error: 'top_5_tech_topics' hilang atau bukan list")
+                if "overall_sentiment" not in parsed_json or not isinstance(parsed_json["overall_sentiment"], str):
+                    raise ValueError("Schema error: 'overall_sentiment' hilang atau bukan string")
+                if "summary" not in parsed_json or not isinstance(parsed_json["summary"], str):
+                    raise ValueError("Schema error: 'summary' hilang atau bukan string")
+
+                logging.info(f"Berhasil parsing dan validasi schema output JSON dengan model: {model}")
                 return parsed_json
 
             except subprocess.TimeoutExpired:
