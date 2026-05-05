@@ -37,50 +37,67 @@ def process_with_llm_cli(raw_text: str) -> Optional[Dict[str, Any]]:
     # Menyiapkan perintah CLI
     combined_input = f"{prompt}\n\nTeks:\n{raw_text}"
 
-    command = ["gemini-cli"]
+    # Fallback Chain Models
+    models = [
+        "models/gemma-4-31b-it",
+        "models/gemma-4-26b-a4b-it",
+        "models/gemma-3-27b-it",
+        "models/gemini-3.1-flash-lite-preview",
+        "models/gemma-3-12b-it",
+        "models/gemma-3-4b-it",
+        "models/gemma-3n-e4b-it",
+        "models/gemma-3n-e2b-it",
+        "models/gemma-3-1b-it"
+    ]
 
-    try:
-        logging.info("Mulai memanggil gemini-cli subprocess menggunakan stdin...")
-        # Menjalankan subprocess, lewatkan kombinasi prompt dan text via stdin (input)
-        result = subprocess.run(
-            command,
-            input=combined_input,
-            capture_output=True,
-            text=True,
-            timeout=30 # 30 detik timeout batas eksekusi
-        )
+    for model in models:
+        # Menambahkan flag --model untuk mencoba model tertentu
+        command = ["gemini-cli", "--model", model]
 
-        if result.returncode != 0:
-            logging.error(f"Eksekusi gemini-cli gagal dengan return code {result.returncode}. Stderr: {result.stderr.strip()}")
-            return None
+        try:
+            logging.info(f"Mulai memanggil gemini-cli subprocess menggunakan model: {model}")
+            result = subprocess.run(
+                command,
+                input=combined_input,
+                capture_output=True,
+                text=True,
+                timeout=30 # 30 detik timeout batas eksekusi
+            )
 
-        raw_output = result.stdout.strip()
+            if result.returncode != 0:
+                logging.error(f"Eksekusi gemini-cli gagal dengan model {model} (return code {result.returncode}). Stderr: {result.stderr.strip()}")
+                continue # Lanjut ke model berikutnya
 
-        # Bersihkan format markdown jika model me-return ```json ... ```
-        clean_json_str = raw_output
-        if clean_json_str.startswith("```"):
-            # Gunakan regex untuk mengambil teks di dalam blok ```json ... ``` atau sekedar ``` ... ```
-            match = re.search(r'```(?:json)?(.*?)```', raw_output, re.DOTALL)
-            if match:
-                clean_json_str = match.group(1).strip()
-            else:
-                # Jika regex tidak match tapi ada ``` di awal, kita potong manual (edge case)
-                clean_json_str = clean_json_str.replace("```json", "").replace("```", "").strip()
+            raw_output = result.stdout.strip()
 
-        # Parse JSON
-        parsed_json = json.loads(clean_json_str)
-        logging.info("Berhasil parsing output gemini-cli menjadi JSON.")
-        return parsed_json
+            # Bersihkan format markdown jika model me-return ```json ... ```
+            clean_json_str = raw_output
+            if clean_json_str.startswith("```"):
+                # Gunakan regex untuk mengambil teks di dalam blok ```json ... ``` atau sekedar ``` ... ```
+                match = re.search(r'```(?:json)?(.*?)```', raw_output, re.DOTALL)
+                if match:
+                    clean_json_str = match.group(1).strip()
+                else:
+                    # Jika regex tidak match tapi ada ``` di awal, kita potong manual (edge case)
+                    clean_json_str = clean_json_str.replace("```json", "").replace("```", "").strip()
 
-    except subprocess.TimeoutExpired:
-        logging.error("Proses gemini-cli timeout setelah 30 detik.")
-        return None
-    except FileNotFoundError:
-        logging.error("Executable 'gemini-cli' tidak ditemukan di sistem (PATH).")
-        return None
-    except json.JSONDecodeError as e:
-        logging.error(f"Gagal mem-parsing output JSON. Error: {e}. Raw Output: {raw_output}")
-        return None
-    except Exception as e:
-        logging.error(f"Kesalahan tak terduga saat memanggil gemini-cli. Error: {e}")
-        return None
+            # Parse JSON
+            parsed_json = json.loads(clean_json_str)
+            logging.info(f"Berhasil parsing output gemini-cli menjadi JSON dengan model: {model}")
+            return parsed_json
+
+        except subprocess.TimeoutExpired:
+            logging.error(f"Proses gemini-cli timeout dengan model {model}.")
+            continue
+        except FileNotFoundError:
+            logging.error("Executable 'gemini-cli' tidak ditemukan di sistem (PATH).")
+            return None # Fail fast if binary missing
+        except json.JSONDecodeError as e:
+            logging.error(f"Gagal mem-parsing output JSON dengan model {model}. Error: {e}")
+            continue
+        except Exception as e:
+            logging.error(f"Kesalahan tak terduga dengan model {model}. Error: {e}")
+            continue
+
+    logging.error("Semua model dalam fallback chain gagal diproses.")
+    return None
