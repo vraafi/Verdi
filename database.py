@@ -109,5 +109,51 @@ def get_latest_data() -> Optional[Dict[str, Any]]:
         if 'conn' in locals():
             conn.close()
 
+def get_historical_data(limit: int = 10) -> Optional[List[Dict[str, Any]]]:
+    """
+    Retrieves the most recent successful records from the database.
+
+    Args:
+        limit (int): The maximum number of records to retrieve.
+
+    Returns:
+        Optional[List[Dict[str, Any]]]: A list of dictionaries containing the records, or None if error.
+    """
+    try:
+        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT * FROM api_data WHERE status = 'success' ORDER BY id DESC LIMIT ?", (limit,)
+        )
+        rows = cursor.fetchall()
+
+        if rows:
+            logging.info(f"Berhasil mengambil {len(rows)} data historis dari database.")
+            results = []
+            for row in rows:
+                try:
+                    results.append({
+                        "id": row["id"],
+                        "tanggal_ekstrak": row["tanggal_ekstrak"],
+                        "data": json.loads(row["data_json"]),
+                        "status": row["status"]
+                    })
+                except json.JSONDecodeError as e:
+                    logging.error(f"Data JSON rusak di database untuk id={row['id']} jika ada. Error: {e}")
+                    continue
+            return results
+        else:
+            logging.info("Tidak ada data 'success' ditemukan di database untuk historis.")
+            return []
+
+    except sqlite3.Error as e:
+        logging.error(f"Gagal mengambil data historis dari database. Error: {e}")
+        return None
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 if __name__ == "__main__":
     init_db()
