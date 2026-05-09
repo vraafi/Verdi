@@ -109,12 +109,13 @@ def get_latest_data() -> Optional[Dict[str, Any]]:
         if 'conn' in locals():
             conn.close()
 
-def get_historical_data(limit: int = 10) -> Optional[List[Dict[str, Any]]]:
+def get_historical_data(limit: int = 10, offset: int = 0) -> Optional[List[Dict[str, Any]]]:
     """
-    Retrieves the most recent successful records from the database.
+    Retrieves successful records from the database with pagination.
 
     Args:
         limit (int): The maximum number of records to retrieve.
+        offset (int): The number of records to skip.
 
     Returns:
         Optional[List[Dict[str, Any]]]: A list of dictionaries containing the records, or None if error.
@@ -125,7 +126,7 @@ def get_historical_data(limit: int = 10) -> Optional[List[Dict[str, Any]]]:
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT * FROM api_data WHERE status = 'success' ORDER BY id DESC LIMIT ?", (limit,)
+            "SELECT * FROM api_data WHERE status = 'success' ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset)
         )
         rows = cursor.fetchall()
 
@@ -154,6 +155,49 @@ def get_historical_data(limit: int = 10) -> Optional[List[Dict[str, Any]]]:
     finally:
         if 'conn' in locals():
             conn.close()
+
+def get_data_by_id(record_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves a specific successful record from the database by ID.
+
+    Args:
+        record_id (int): The ID of the record to retrieve.
+
+    Returns:
+        Optional[Dict[str, Any]]: A dictionary containing the record, or None if not found/error.
+    """
+    try:
+        conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT * FROM api_data WHERE id = ? AND status = 'success'", (record_id,)
+        )
+        row = cursor.fetchone()
+
+        if row:
+            logging.info(f"Berhasil mengambil data dengan ID {record_id} dari database.")
+            return {
+                "id": row["id"],
+                "tanggal_ekstrak": row["tanggal_ekstrak"],
+                "data": json.loads(row["data_json"]),
+                "status": row["status"]
+            }
+        else:
+            logging.info(f"Tidak ada data dengan ID {record_id} ditemukan di database.")
+            return None
+
+    except sqlite3.Error as e:
+        logging.error(f"Gagal mengambil data by ID dari database. Error: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        logging.error(f"Data JSON rusak di database untuk id={record_id}. Error: {e}")
+        return None
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 
 if __name__ == "__main__":
     init_db()

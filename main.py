@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 import logging
 import os
 
-from database import init_db, get_latest_data, insert_data, get_historical_data
+from database import init_db, get_latest_data, insert_data, get_historical_data, get_data_by_id
 from scraper import scrape_data
 from cli_parser import process_with_llm_cli
 
@@ -65,25 +65,47 @@ def get_latest_pipeline_data():
     return data_record
 
 @app.get("/api/v1/data/history", response_class=JSONResponse, dependencies=[Depends(verify_rapidapi_secret)])
-def get_pipeline_data_history(limit: int = 10):
+def get_pipeline_data_history(limit: int = 10, offset: int = 0):
     """
-    Endpoint untuk mengambil historis data yang berhasil diproses dari SQLite.
+    Endpoint untuk mengambil historis data yang berhasil diproses dari SQLite dengan paginasi.
     Returns:
         JSON array murni.
     """
-    logging.info(f"Menerima request terverifikasi untuk endpoint GET /api/v1/data/history dengan limit={limit}")
+    # Strict limits for API endpoints to prevent DB DoS
+    if limit > 50:
+        raise HTTPException(status_code=400, detail="Limit cannot exceed 50")
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="Limit must be at least 1")
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="Offset cannot be negative")
 
-    data_records = get_historical_data(limit=limit)
+    logging.info(f"Menerima request terverifikasi GET /api/v1/data/history (limit={limit}, offset={offset})")
+
+    data_records = get_historical_data(limit=limit, offset=offset)
 
     if data_records is None:
         logging.error("Terjadi error saat mengambil data historis")
         raise HTTPException(status_code=500, detail="Internal server error while fetching history")
 
-    if not data_records:
-        logging.info("Data historis kosong")
-        # Bisa return list kosong saja
+    return {"count": len(data_records), "offset": offset, "limit": limit, "data": data_records}
 
-    return {"count": len(data_records), "data": data_records}
+@app.get("/api/v1/data/{record_id}", response_class=JSONResponse, dependencies=[Depends(verify_rapidapi_secret)])
+def get_pipeline_data_by_id(record_id: int):
+    """
+    Endpoint untuk mengambil spesifik data yang berhasil diproses berdasarkan ID.
+    Returns:
+        JSON murni.
+    """
+    logging.info(f"Menerima request terverifikasi GET /api/v1/data/{record_id}")
+
+    data_record = get_data_by_id(record_id)
+
+    if data_record is None:
+        logging.error(f"Data dengan id={record_id} tidak ditemukan.")
+        raise HTTPException(status_code=404, detail=f"No data available for id {record_id}")
+
+    return data_record
+
 
 @app.post("/api/v1/pipeline/run", response_class=JSONResponse, dependencies=[Depends(verify_rapidapi_secret)])
 def run_pipeline():
