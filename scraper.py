@@ -38,7 +38,8 @@ def scrape_data(urls: Optional[List[str]] = None) -> Optional[str]:
     for url in urls:
         try:
             logging.info(f"Mencoba melakukan scraping pada URL: {url}")
-            response = requests.get(url, headers=headers, timeout=15)
+            # strict timeout of 10 seconds for each url
+            response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()  # Check for HTTP errors
 
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -46,16 +47,26 @@ def scrape_data(urls: Optional[List[str]] = None) -> Optional[str]:
             # Ekstrak semua teks, buang tag HTML
             text_content = soup.get_text(separator=' ', strip=True)
 
-            concatenated_texts.append(f"--- SUMBER: {url} ---\n{text_content}\n")
-            logging.info(f"Scraping berhasil dilakukan untuk URL: {url}")
+            # pastikan text yang didapat cukup valid (misal lebih dari 50 karakter)
+            if len(text_content) > 50:
+                concatenated_texts.append(f"--- SUMBER: {url} ---\n{text_content}\n")
+                logging.info(f"Scraping berhasil dilakukan untuk URL: {url}")
+            else:
+                logging.warning(f"Teks dari {url} terlalu pendek ({len(text_content)} karakter), diabaikan.")
 
         except requests.exceptions.RequestException as e:
             logging.error(f"Gagal melakukan request ke URL {url}. Error: {e}")
         except Exception as e:
             logging.error(f"Terjadi kesalahan tak terduga saat scraping {url}. Error: {e}")
 
+    # hanya return text jika hasil text gabungan cukup panjang (misal > 100 karakter)
     if concatenated_texts:
-        return "\n".join(concatenated_texts)
+        final_text = "\n".join(concatenated_texts)
+        if len(final_text) > 100:
+            return final_text
+        else:
+            logging.error("Total teks terlalu pendek, kemungkinan gagal mengekstrak data esensial.")
+            return None
     else:
         logging.error("Semua target URL gagal di-scrape.")
         return None

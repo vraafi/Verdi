@@ -42,7 +42,16 @@ def process_with_llm_cli(raw_text: str) -> Optional[Dict[str, Any]]:
         '  "top_5_tech_topics": ["Tech1", "Tech2", "Tech3", "Tech4", "Tech5"],\n'
         '  "overall_sentiment": "Positif/Negatif/Netral",\n'
         '  "summary": "Satu paragraf singkat 50 kata mengenai trend saat ini."\n'
-        "}\n"
+        "}\n\n"
+        "CONTOH INPUT:\n"
+        "--- SUMBER: https://github.com/trending ---\n"
+        "Rust is a blazing fast language. Python is great for AI.\n"
+        "CONTOH OUTPUT JSON:\n"
+        "{\n"
+        '  "top_5_tech_topics": ["Rust", "Python", "AI", "Performance", "Programming"],\n'
+        '  "overall_sentiment": "Positif",\n'
+        '  "summary": "Rust and Python are currently trending, particularly for their performance and AI capabilities."\n'
+        "}\n\n"
         "KEMBALIKAN HANYA JSON VALID TANPA MARKDOWN. JANGAN TAMBAHKAN TEKS LAIN."
     )
 
