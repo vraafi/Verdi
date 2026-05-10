@@ -1,3 +1,5 @@
 __pycache__/
 pipeline.db
 system.log
+server.log
+response.log

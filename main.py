@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, BackgroundTasks
 from fastapi.responses import JSONResponse
 import logging
 import os
@@ -107,33 +107,42 @@ def get_pipeline_data_by_id(record_id: int):
     return data_record
 
 
-@app.post("/api/v1/pipeline/run", response_class=JSONResponse, dependencies=[Depends(verify_rapidapi_secret)])
-def run_pipeline():
+def run_pipeline_task():
+    """
+    Background task to execute the data pipeline.
+    """
+    logging.info("Memulai background task: pipeline manual.")
+
+    # 1. Scrape
+    raw_text = scrape_data()
+    if not raw_text:
+        logging.error("Pipeline background gagal: Scraper tidak menghasilkan data.")
+        return
+
+    # 2. Parse AI
+    parsed_json = process_with_llm_cli(raw_text)
+    if not parsed_json:
+        logging.error("Pipeline background gagal: AI Parser gagal memproses teks.")
+        return
+
+    # 3. Simpan ke database
+    success = insert_data(parsed_json, status="success")
+    if not success:
+        logging.error("Pipeline background gagal: Gagal menyimpan data ke database.")
+        return
+
+    logging.info("Pipeline background berhasil dijalankan dan data telah disimpan.")
+
+
+@app.post("/api/v1/pipeline/run", response_class=JSONResponse, status_code=202, dependencies=[Depends(verify_rapidapi_secret)])
+def run_pipeline(background_tasks: BackgroundTasks):
     """
     Endpoint untuk menjalankan scraper, memprosesnya dengan AI CLI, dan menyimpannya ke database secara manual.
     """
     logging.info("Menerima request untuk menjalankan pipeline manual (/api/v1/pipeline/run)")
 
-    # 1. Scrape
-    raw_text = scrape_data()
-    if not raw_text:
-        logging.error("Pipeline gagal: Scraper tidak menghasilkan data.")
-        raise HTTPException(status_code=500, detail="Scraping failed")
-
-    # 2. Parse AI
-    parsed_json = process_with_llm_cli(raw_text)
-    if not parsed_json:
-        logging.error("Pipeline gagal: AI Parser gagal memproses teks.")
-        raise HTTPException(status_code=500, detail="AI Parsing failed")
-
-    # 3. Simpan ke database
-    success = insert_data(parsed_json, status="success")
-    if not success:
-        logging.error("Pipeline gagal: Gagal menyimpan data ke database.")
-        raise HTTPException(status_code=500, detail="Database insertion failed")
-
-    logging.info("Pipeline manual berhasil dijalankan dan data telah disimpan.")
-    return {"status": "success", "message": "Pipeline run successfully and data saved"}
+    background_tasks.add_task(run_pipeline_task)
+    return {"status": "processing", "message": "Pipeline started in the background"}
 
 # Server akan dijalankan menggunakan Uvicorn di command line
 # Contoh: RAPIDAPI_SECRET="my_secret" uvicorn main:app --host 0.0.0.0 --port 8000
